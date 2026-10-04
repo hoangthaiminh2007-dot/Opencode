@@ -22,6 +22,7 @@
 <body>
 <canvas id="game"></canvas>
 <div class="hud">
+  <div class="pill">🗺️ Màn <span id="level">1</span></div>
   <div class="pill">⚡ <span id="energy">120</span> (+<span id="rate">0</span>/s)</div>
   <div class="pill">🪖 <span id="ucount">0</span> vs <span id="ecount">0</span></div>
   <div class="pill">⏱️ <span id="time">0</span>s</div>
@@ -39,7 +40,8 @@
     <h2>NEON COMMAND — RTS thử nghiệm</h2>
     <p style="color:#94a3b8">Phá <b style="color:#f87171">nhà đỏ</b> trước khi mất <b style="color:#7dd3fc">nhà xanh</b>. Chiếm <b style="color:#fde047">điểm vàng</b> để có năng lượng đẻ quân.</p>
     <p style="text-align:left">◾ <b>Chuột trái</b> kéo khung chọn quân xanh<br>◾ <b>Chuột phải</b> ra lệnh đi/đánh (tự đánh địch gần đường đi)<br>◾ <b>1 / 2</b> đẻ Scout/Tank ở nhà chính<br>◾ Đứng trong vòng vàng 3s để chiếm điểm (+1⚡/s mỗi điểm)<br>◾ Địch cũng đẻ quân và đi chiếm điểm — đừng để late!</p>
-    <button class="b1" id="play">▶ BẮT ĐẦU</button><br><br>
+    <div id="levels" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0"></div>
+    <br>
     <a href="../index.html">← về trang chủ</a>
   </div>
 </div>
@@ -47,7 +49,9 @@
   <div class="panel">
     <h2 id="result">THẮNG!</h2>
     <p id="stats"></p>
-    <button class="b1" id="retry">↻ CHƠI LẠI (R)</button><br><br>
+    <button class="b1" id="retry">↻ CHƠI LẠI (R)</button>
+    <button class="b2" id="next">MÀN TIẾP ▶</button><br><br>
+    <button class="b1" id="menu" style="background:#334155;color:#fff">🗺️ Chọn màn</button><br><br>
     <a href="../index.html">← về trang chủ</a>
   </div>
 </div>
@@ -74,14 +78,39 @@ function updMute(){ $('mute').textContent=muted?'🔇':'🔊'; } updMute();
 $('mute').onclick=e=>{e.stopPropagation();muted=!muted;localStorage.setItem('neon-muted',muted?'1':'0');updMute();};
 
 const COST={scout:30,tank:100};
+const LEVELS=[
+  {name:'1 — Tập sự', desc:'1 điểm vàng, địch yếu, không tank', energy:150, enemyEnergy:0, pHP:600, eHP:300, aiBase:10, aiMin:6, tankAt:999, enemyTanks:false, nodes:[{x:800,y:450,r:48}]},
+  {name:'2 — Tranh chấp', desc:'3 điểm vàng, địch thường', energy:120, enemyEnergy:60, pHP:600, eHP:600, aiBase:7, aiMin:3.5, tankAt:50, enemyTanks:true, nodes:[{x:800,y:200,r:42},{x:800,y:450,r:48},{x:800,y:700,r:42}]},
+  {name:'3 — Tổng lực', desc:'Địch đông, tank sớm, nhà đỏ 800 máu', energy:120, enemyEnergy:100, pHP:600, eHP:800, aiBase:5.5, aiMin:3, tankAt:30, enemyTanks:true, extraTanks:1, nodes:[{x:800,y:200,r:42},{x:800,y:450,r:48},{x:800,y:700,r:42}]},
+  {name:'4 — Ác mộng', desc:'Nhà đỏ 1000 máu, AI đẻ liên tục', energy:120, enemyEnergy:140, pHP:600, eHP:1000, aiBase:4, aiMin:2.5, tankAt:20, enemyTanks:true, extraTanks:2, nodes:[{x:800,y:200,r:42},{x:800,y:450,r:48},{x:800,y:700,r:42}]},
+];
+let curLevel=0;
+let unlocked=+(localStorage.getItem('neon-cmd-unlock')||1);
 let units,nodes,parts,running,energy,enemyEnergy,elapsed,t0,selected,drag,aiT,nextId,over;
 
+function renderLevels(){
+  const box=$('levels'); box.innerHTML='';
+  LEVELS.forEach((lv,i)=>{
+    const b=document.createElement('button');
+    const open=(i+1)<=unlocked;
+    b.textContent=(open?'▶ ':'🔒 ')+lv.name;
+    b.className='b1'; b.disabled=!open; b.title=lv.desc;
+    b.onclick=()=>{ curLevel=i; state={pHP:lv.pHP,eHP:lv.eHP}; reset(); last=performance.now(); requestAnimationFrame(loop); beep(660,.1); };
+    box.appendChild(b);
+  });
+}
+renderLevels();
+
 function reset(){
+  const lv=LEVELS[curLevel];
   units=[];parts=[];selected=new Set();drag=null;aiT=4;nextId=1;over=false;
-  energy=120;enemyEnergy=60;elapsed=0;t0=performance.now();running=true;
-  nodes=[{x:800,y:200,r:42,owner:0,p:0},{x:800,y:450,r:48,owner:0,p:0},{x:800,y:700,r:42,owner:0,p:0}];
+  energy=lv.energy;enemyEnergy=lv.enemyEnergy;elapsed=0;t0=performance.now();running=true;
+  $('level').textContent=curLevel+1;
+  $('hint').textContent=`Màn ${curLevel+1}: ${lv.desc}`;
+  nodes=lv.nodes.map(n=>({x:n.x,y:n.y,r:n.r,owner:0,p:0}));
   units.push(mkUnit(1,'scout',180,420),mkUnit(1,'scout',180,480));
   units.push(mkUnit(-1,'scout',1420,420),mkUnit(-1,'scout',1420,480));
+  for(let i=0;i<(lv.extraTanks||0);i++) units.push(mkUnit(-1,'tank',1420,300+i*150));
   $('start').classList.add('hidden');$('over').classList.add('hidden');
 }
 function mkUnit(side,type,x,y){
@@ -122,9 +151,14 @@ function damageBase(side,atk){
 }
 function end(win){
   if(over)return; over=true; running=false;
-  $('result').textContent=win?'🏆 THẮNG! Phá được nhà đỏ':'💀 THUA — mất nhà xanh';
+  if(win && curLevel+1 < LEVELS.length && curLevel+2 > unlocked){
+    unlocked=curLevel+2; localStorage.setItem('neon-cmd-unlock',unlocked); renderLevels();
+  }
+  $('result').textContent=win?`🏆 THẮNG MÀN ${curLevel+1}!`:'💀 THUA — mất nhà xanh';
   $('result').style.color=win?'#4ade80':'#f87171';
-  $('stats').textContent=`Sống ${elapsed.toFixed(0)}s — quân bạn ${units.filter(u=>u.side===1).length}, địch ${units.filter(u=>u.side===-1).length}. Bấm R chơi lại.`;
+  const hasNext=win && curLevel+1<LEVELS.length;
+  $('stats').textContent=`Màn ${curLevel+1}: ${LEVELS[curLevel].desc}. Sống ${elapsed.toFixed(0)}s. Bấm R chơi lại${hasNext?' hoặc qua Màn tiếp':''}.`;
+  $('next').style.display=hasNext?'inline-block':'none';
   $('over').classList.remove('hidden'); beep(win?880:150,.4,'sawtooth',.07);
 }
 
@@ -149,11 +183,12 @@ function loop(now){
     else n.p=Math.max(0,n.p-dt/3);
   }
 
-  // AI địch
+  // AI địch theo màn
   aiT-=dt;
   if(aiT<=0){
-    aiT=Math.max(3.5,7-elapsed/60);
-    const wantTank=elapsed>50&&enemyEnergy>=COST.tank&&Math.random()<0.5;
+    const lv=LEVELS[curLevel];
+    aiT=Math.max(lv.aiMin,lv.aiBase-elapsed/60);
+    const wantTank=lv.enemyTanks&&elapsed>lv.tankAt&&enemyEnergy>=COST.tank&&Math.random()<0.5;
     const type=wantTank?'tank':'scout';
     if(build(-1,type)){
       const u=units[units.length-1];
@@ -223,8 +258,8 @@ function draw(now){
     ctx.fillStyle='#fff';ctx.font='bold 13px system-ui';ctx.textAlign='center';ctx.fillText(n.owner===1?'+1 BẠN':n.owner===-1?'+1 ĐỊCH':'+1 VÀNG',n.x,n.y+4);
   }
   // nhà
-  drawBase(120,450,state.pHP,600,'#2563eb','NHÀ BẠN');
-  drawBase(1480,450,state.eHP,600,'#dc2626','NHÀ ĐỊCH');
+  drawBase(120,450,state.pHP,LEVELS[curLevel].pHP,'#2563eb','NHÀ BẠN');
+  drawBase(1480,450,state.eHP,LEVELS[curLevel].eHP,'#dc2626','NHÀ ĐỊCH');
   // quân
   for(const u of units){
     const c=u.side===1?'#38bdf8':'#f87171';
@@ -278,12 +313,13 @@ addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   if(k==='1')build(1,'scout'); if(k==='2')build(1,'tank');
   if(k==='m'){$('mute').click();}
-  if(k==='r'&&over){state={pHP:600,eHP:600};reset();last=performance.now();requestAnimationFrame(loop);}
+  if(k==='r'&&over){state={pHP:LEVELS[curLevel].pHP,eHP:LEVELS[curLevel].eHP};reset();last=performance.now();requestAnimationFrame(loop);}
 });
 $('buildScout').onclick=()=>build(1,'scout');
 $('buildTank').onclick=()=>build(1,'tank');
-$('play').onclick=()=>{state={pHP:600,eHP:600};reset();last=performance.now();requestAnimationFrame(loop);beep(660,.1);};
-$('retry').onclick=()=>{state={pHP:600,eHP:600};reset();last=performance.now();requestAnimationFrame(loop);};
+$('retry').onclick=()=>{state={pHP:LEVELS[curLevel].pHP,eHP:LEVELS[curLevel].eHP};reset();last=performance.now();requestAnimationFrame(loop);};
+$('next').onclick=()=>{ if(curLevel+1<LEVELS.length){curLevel++;state={pHP:LEVELS[curLevel].pHP,eHP:LEVELS[curLevel].eHP};reset();last=performance.now();requestAnimationFrame(loop);} };
+$('menu').onclick=()=>{ running=false; $('over').classList.add('hidden'); $('start').classList.remove('hidden'); renderLevels(); };
 requestAnimationFrame(loop);
 </script>
 </body>
