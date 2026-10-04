@@ -13,11 +13,12 @@ Game sinh tồn 1 mạng, càng sống lâu điểm càng cao. Đọc 1 phút l�
 
 ## 3. Cá lớn nuốt cá bé
 - Bạn bắt đầu size **12**, ăn orb **+0.5** (tối đa **26**), lâu không ăn sẽ xẹp dần về 12.
-- Địch có 2 loại: **nhỏ (~6-12)** và **to (15-20)** xuất hiện 20%.
+- Địch nhỏ (~6-12) ăn được sớm. Địch to xuất hiện **nhiều dần (20% → 45%)**, size tăng theo **cấp số nhân 1.12^(thời gian/15s)**.
+- **TITAN tím**: xuất hiện **mỗi 25 giây**, size = 26 + thời gian×0.3 (tối đa 46) — **luôn to hơn bạn, không bao giờ nuốt được**.
 - Quy tắc chạm:
   - Bạn **to hơn địch trên 1 đơn vị** → **nuốt địch: +15 × combo**, địch biến thành **1 orb** ngay chỗ đó, bạn to thêm +0.8.
   - Ngược lại → **thua ngay**.
-- Nhận biết nhanh: địch **viền xanh = ăn được**, **viền đỏ = tránh xa**.
+- Nhận biết nhanh: địch **viền xanh = ăn được**, **viền đỏ = tránh xa**, **viền tím dày + chữ TITAN = chạy ngay**.
 
 ## 4. Tính điểm thế nào?
 - Sống sót: +điểm mỗi giây (càng lâu càng nhiều).
@@ -31,9 +32,10 @@ Game sinh tồn 1 mạng, càng sống lâu điểm càng cao. Đọc 1 phút l�
 - Hồi chiêu **1.5 giây** (xem thanh xanh dưới 🏆).
 - Dùng khi bị bao vây, không dùng bừa vì lúc cần lại chưa hồi.
 
-## 6. Điều khiển
+## 6. Điều khiển + âm thanh
 - **WASD** hoặc **←↑↓→**, hoặc **di chuột / chạm** — nhân vật chạy theo.
 - **Space**: Dash. **R**: chơi lại ngay sau khi thua.
+- **M** hoặc nút **🔊 góc trên**: tắt/mở tiếng. Lưu tự động trên máy.
 
 ## 7. Cách chơi 30 giây đầu cho người mới
 1. 10s đầu: chỉ chạy vòng tròn nhỏ quanh giữa map + ăn orb **gần**, bỏ qua orb xa.
@@ -43,6 +45,7 @@ Game sinh tồn 1 mạng, càng sống lâu điểm càng cao. Đọc 1 phút l�
 ## 8. Mẹo lên điểm cao
 - Đầu game ăn orb lên size ~16 rồi đi săn địch nhỏ viền xanh để snowball.
 - Thấy địch viền đỏ to hơn mình: bỏ chạy, ăn orb chỗ khác cho to ra rồi quay lại nuốt nó.
+- Sau 50s đừng tham nuốt nữa: địch to theo cấp số nhân + TITAN dí, ưu tiên sống sót giữ combo.
 - Giữ combo: đừng tham orb xa quá 4 giây, thà ăn orb gần giữ chuỗi.
 - Chạy men theo viền map khi đông quá, địch chỉ tới từ 1 phía.
 - Dash về phía **có orb**, vừa thoát vừa +điểm.

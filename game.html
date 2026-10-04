@@ -45,6 +45,7 @@
   <div class="pill">⭐ <span id="score">0</span></div>
   <div class="pill" id="combo">x1 COMBO</div>
   <div class="pill">🏆 <span id="best">0</span><span id="dashbar"><span id="dashfill"></span></span></div>
+  <div class="pill" id="mutebtn" title="Tắt/bật tiếng (M)" style="cursor:pointer;pointer-events:auto">🔊</div>
 </div>
 
 <div id="start" class="overlay">
@@ -56,8 +57,10 @@
         <li>💜 <b>Bạn:</b> chấm tím, đi bằng <kbd>WASD</kbd> / chuột / chạm. Ăn orb để <b>to ra</b> (tối đa 26)</li>
         <li>🔴 <b>Đỏ viền đỏ:</b> to hơn bạn — tránh xa, chạm là thua</li>
         <li>🟢 <b>Đỏ viền xanh:</b> nhỏ hơn bạn — <b>nuốt được +15đ × combo</b>, nhả ra 1 orb</li>
+        <li>👹 <b>TITAN tím:</b> xuất hiện mỗi 25s, to dần theo cấp số nhân — <b>không nuốt được</b>, chỉ né</li>
         <li>🔵 <b>Orb xanh</b> +10đ × combo. Ăn liên tiếp trong 4s để lên <b>x8</b></li>
         <li>⚡ <b>Dash:</b> <kbd>Space</kbd> lướt + bất tử 0.4s, hồi 1.5s</li>
+        <li>🔊 <b>Tiếng:</b> bấm <kbd>M</kbd> hoặc nút 🔊 góc trên để tắt/mở</li>
         <li>🗺️ <b>Map:</b> 2400×2400, xem minimap góc phải dưới</li>
       </ul>
     </div>
@@ -95,14 +98,21 @@ let best = +(localStorage.getItem(BEST_KEY)||0);
 let plays = +(localStorage.getItem(PLAYS_KEY)||0);
 $('best').textContent = best; $('bestStart').textContent = best; $('plays').textContent = plays;
 
-let player, enemies, orbs, parts, keys, running=false, score=0, combo=1, comboT=0, maxcombo=1, t0=0, elapsed=0, dashCD=0, shake=0, mouse={sx:innerWidth/2,sy:innerHeight/2,active:false};
+let player, enemies, orbs, parts, keys, running=false, score=0, combo=1, comboT=0, maxcombo=1, t0=0, elapsed=0, dashCD=0, shake=0, nextTitan=25, mouse={sx:innerWidth/2,sy:innerHeight/2,active:false};
+let muted = localStorage.getItem('neon-muted')==='1';
 
-addEventListener('keydown', e=>{ keys[e.key.toLowerCase()]=true; if(e.code==='Space'){e.preventDefault(); tryDash();} if(e.key.toLowerCase()==='r' && !running) start(); });
+function updateMuteBtn(){ $('mutebtn').textContent = muted ? '🔇' : '🔊'; }
+function toggleMute(){ muted=!muted; localStorage.setItem('neon-muted', muted?'1':'0'); updateMuteBtn(); }
+updateMuteBtn();
+$('mutebtn').onclick = (e)=>{ e.stopPropagation(); toggleMute(); };
+
+addEventListener('keydown', e=>{ keys[e.key.toLowerCase()]=true; if(e.code==='Space'){e.preventDefault(); tryDash();} if(e.key.toLowerCase()==='r' && !running) start(); if(e.key.toLowerCase()==='m') toggleMute(); });
 addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
 cv.addEventListener('pointermove', e=>{ mouse.sx=e.clientX; mouse.sy=e.clientY; mouse.active=true; });
 cv.addEventListener('pointerdown', e=>{ mouse.sx=e.clientX; mouse.sy=e.clientY; mouse.active=true; });
 
 function beep(f=440,d=.07,type='square',v=.05){
+  if(muted) return;
   try{
     const a = beep.ac || (beep.ac = new (window.AudioContext||window.webkitAudioContext)());
     const o=a.createOscillator(), g=a.createGain();
@@ -122,11 +132,30 @@ function spawnEnemy(){
   else if(side===2){x=vx0+Math.random()*(vx1-vx0);y=vy1;} else {x=vx0;y=vy0+Math.random()*(vy1-vy0);}
   x=Math.max(20,Math.min(WORLD.w-20,x)); y=Math.max(20,Math.min(WORLD.h-20,y));
   const diff = Math.min(1.8, 1 + elapsed/45);
-  // 20% địch to để tạo nguy hiểm, còn lại địch nhỏ ăn được
-  let r, sp;
-  if(Math.random()<0.2){ r = 15+Math.random()*5; sp = (40+Math.random()*40)*diff; }
+  // địch to xuất hiện nhiều dần theo thời gian, size tăng theo cấp số nhân
+  const bigChance = Math.min(0.45, 0.2 + elapsed/180);
+  let r, sp, titan=false;
+  if(Math.random()<bigChance){
+    const growth = Math.pow(1.12, elapsed/15); // cấp số nhân theo thời gian sống
+    r = Math.min(42, (16 + elapsed*0.2 + Math.random()*5) * growth / 2 + 8);
+    sp = (40+Math.random()*40)*diff; titan = r >= 22;
+  }
   else { r = (9+Math.random()*8)*0.7; sp = (50+Math.random()*60)*diff; }
-  enemies.push({x,y,r,sp,hue:Math.random()*40});
+  enemies.push({x,y,r,sp,hue: titan ? 280 : Math.random()*40, titan});
+}
+
+function spawnTitan(){
+  // titan định kỳ mỗi 25s: luôn to hơn người chơi, không thể nuốt
+  const m = 80;
+  const a = Math.random()*Math.PI*2;
+  let x = player.x + Math.cos(a)*(Math.max(cv.width,cv.height)/2 + m);
+  let y = player.y + Math.sin(a)*(Math.max(cv.width,cv.height)/2 + m);
+  x=Math.max(30,Math.min(WORLD.w-30,x)); y=Math.max(30,Math.min(WORLD.h-30,y));
+  const r = Math.min(46, 26 + elapsed*0.3);
+  const diff = Math.min(1.8, 1 + elapsed/45);
+  enemies.push({x,y,r,sp:75*diff,hue:280,titan:true});
+  beep(110,.4,'sawtooth',.08);
+  burst(x,y,'#a78bfa',20);
 }
 function spawnOrb(){
   orbs.push({x:40+Math.random()*(WORLD.w-80), y:40+Math.random()*(WORLD.h-80), r:8, pulse:Math.random()*6});
@@ -145,7 +174,7 @@ function burst(x,y,color,n=10){
 function start(){
   player={x:WORLD.w/2,y:WORLD.h/2,r:12,vx:0,vy:0,inv:1.5,dash:0};
   enemies=[]; orbs=[]; parts=[]; keys={};
-  score=0; combo=1; comboT=0; maxcombo=1; elapsed=0; dashCD=0; shake=0; t0=performance.now();
+  score=0; combo=1; comboT=0; maxcombo=1; elapsed=0; dashCD=0; shake=0; nextTitan=25; t0=performance.now();
   cam.x = player.x - cv.width/2; cam.y = player.y - cv.height/2;
   for(let i=0;i<12;i++) spawnOrb();
   running=true;
@@ -178,6 +207,8 @@ function loop(now){
   // difficulty (giảm ~40% so với trước)
   if(Math.random() < (0.012 + elapsed*0.001)) spawnEnemy();
   if(orbs.length<12 && Math.random()<0.06) spawnOrb();
+  // titan định kỳ: càng sống lâu càng to, không thể nuốt
+  if(elapsed >= nextTitan){ spawnTitan(); nextTitan += 25; }
 
   // move player (mouse screen -> world)
   const ACC=1600; let ax=0, ay=0;
@@ -272,12 +303,13 @@ function loop(now){
   }
   for(const e of enemies){
     const edible = player.r > e.r + 1;
-    ctx.shadowBlur=16; ctx.shadowColor= edible ? '#22d3ee' : '#ef4444';
+    ctx.shadowBlur = e.titan ? 26 : 16; ctx.shadowColor= e.titan ? '#a78bfa' : (edible ? '#22d3ee' : '#ef4444');
     ctx.fillStyle=`hsl(${e.hue} 90% 60%)`;
     ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,7); ctx.fill(); ctx.shadowBlur=0;
-    // vòng ngoài báo ăn được (xanh) hay nguy hiểm (đỏ)
-    ctx.strokeStyle= edible ? '#22d3ee' : '#ef4444'; ctx.lineWidth=2;
+    // vòng ngoài báo ăn được (xanh) hay nguy hiểm (đỏ), titan viền tím dày
+    ctx.strokeStyle= e.titan ? '#a78bfa' : (edible ? '#22d3ee' : '#ef4444'); ctx.lineWidth= e.titan ? 4 : 2;
     ctx.beginPath(); ctx.arc(e.x,e.y,e.r+3,0,7); ctx.stroke();
+    if(e.titan){ ctx.fillStyle='#fff'; ctx.font='bold 12px system-ui'; ctx.textAlign='center'; ctx.fillText('TITAN', e.x, e.y- e.r -8); }
   }
   for(const p of parts){ ctx.globalAlpha=Math.max(0,p.life*2); ctx.fillStyle=p.color; ctx.fillRect(p.x-2,p.y-2,4,4); }
   ctx.globalAlpha=1;
