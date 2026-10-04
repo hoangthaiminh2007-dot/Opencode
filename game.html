@@ -33,23 +33,34 @@
   kbd { background:#1e293b; border:1px solid #475569; border-radius:6px; padding:2px 8px; }
   a.back { color:#7dd3fc; text-decoration:none; display:inline-block; margin-top:12px; }
   .best { font-size:20px; color:#fde047; }
+  .rules { text-align:left; background:#020617; border:1px solid #1e293b; border-radius:12px; padding:12px 14px; margin:12px 0; font-size:14px; }
+  .rules li { margin:6px 0; list-style:none; }
+  .rules ul { padding:0; margin:0; }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 
 <div class="hud">
-  <div class="pill">❤️ <span id="lives">3</span></div>
   <div class="pill">⭐ <span id="score">0</span></div>
   <div class="pill" id="combo">x1 COMBO</div>
   <div class="pill">🏆 <span id="best">0</span><span id="dashbar"><span id="dashfill"></span></span></div>
 </div>
 
 <div id="start" class="overlay">
-  <div class="panel">
+  <div class="panel" style="max-width:480px">
     <h1>NEON <span>SURVIVE</span></h1>
-    <p>Map lớn + <b>3 ❤️</b>! Sống càng lâu càng tốt. Ăn orb xanh để lên combo <b>x8</b>.</p>
-    <p>Di chuyển: <kbd>WASD</kbd> / <kbd>←↑↓→</kbd> / chuột / chạm<br>Dash bất tử: <kbd>Space</kbd> — hồi nhanh 1.5s</p>
+    <p>Game sinh tồn 1 mạng — càng sống lâu, điểm càng cao.</p>
+    <div class="rules">
+      <ul>
+        <li>💜 <b>Bạn:</b> chấm tím, đi bằng <kbd>WASD</kbd> / chuột / chạm</li>
+        <li>🔴 <b>Tránh:</b> chấm đỏ — chạm 1 cái là thua ngay</li>
+        <li>🔵 <b>Ăn:</b> chấm xanh +10đ × combo. Ăn liên tiếp trong 4s để lên <b>x8</b></li>
+        <li>⚡ <b>Dash:</b> <kbd>Space</kbd> để lướt nhanh + bất tử 0.4s, hồi sau 1.5s</li>
+        <li>🗺️ <b>Map:</b> rộng 2400×2400, xem vị trí ở minimap góc phải dưới</li>
+      </ul>
+    </div>
+    <p>💡 Mẹo cho người mới: 10 giây đầu chỉ chạy + ăn orb gần, đừng đuổi orb xa. Để dành Dash khi bị bao vây.</p>
     <p class="best">🏆 Kỷ lục: <span id="bestStart">0</span> — đã chơi <span id="plays">0</span> ván</p>
     <button class="btn" id="playBtn">▶ CHƠI NGAY</button><br>
     <a class="back" href="index.html">← về trang chủ</a>
@@ -82,7 +93,7 @@ let best = +(localStorage.getItem(BEST_KEY)||0);
 let plays = +(localStorage.getItem(PLAYS_KEY)||0);
 $('best').textContent = best; $('bestStart').textContent = best; $('plays').textContent = plays;
 
-let player, enemies, orbs, parts, keys, running=false, score=0, lives=3, combo=1, comboT=0, maxcombo=1, t0=0, elapsed=0, dashCD=0, shake=0, mouse={sx:innerWidth/2,sy:innerHeight/2,active:false};
+let player, enemies, orbs, parts, keys, running=false, score=0, combo=1, comboT=0, maxcombo=1, t0=0, elapsed=0, dashCD=0, shake=0, mouse={sx:innerWidth/2,sy:innerHeight/2,active:false};
 
 addEventListener('keydown', e=>{ keys[e.key.toLowerCase()]=true; if(e.code==='Space'){e.preventDefault(); tryDash();} if(e.key.toLowerCase()==='r' && !running) start(); });
 addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
@@ -109,7 +120,7 @@ function spawnEnemy(){
   else if(side===2){x=vx0+Math.random()*(vx1-vx0);y=vy1;} else {x=vx0;y=vy0+Math.random()*(vy1-vy0);}
   x=Math.max(20,Math.min(WORLD.w-20,x)); y=Math.max(20,Math.min(WORLD.h-20,y));
   const diff = Math.min(1.8, 1 + elapsed/45);
-  enemies.push({x,y,r:9+Math.random()*8, sp:(50+Math.random()*60)*diff, hue:Math.random()*40});
+  enemies.push({x,y,r:(9+Math.random()*8)*0.7, sp:(50+Math.random()*60)*diff, hue:Math.random()*40});
 }
 function spawnOrb(){
   orbs.push({x:40+Math.random()*(WORLD.w-80), y:40+Math.random()*(WORLD.h-80), r:8, pulse:Math.random()*6});
@@ -128,8 +139,7 @@ function burst(x,y,color,n=10){
 function start(){
   player={x:WORLD.w/2,y:WORLD.h/2,r:12,vx:0,vy:0,inv:1.5,dash:0};
   enemies=[]; orbs=[]; parts=[]; keys={};
-  score=0; lives=3; combo=1; comboT=0; maxcombo=1; elapsed=0; dashCD=0; shake=0; t0=performance.now();
-  $('lives').textContent = lives;
+  score=0; combo=1; comboT=0; maxcombo=1; elapsed=0; dashCD=0; shake=0; t0=performance.now();
   cam.x = player.x - cv.width/2; cam.y = player.y - cv.height/2;
   for(let i=0;i<12;i++) spawnOrb();
   running=true;
@@ -137,17 +147,6 @@ function start(){
   plays++; localStorage.setItem(PLAYS_KEY, plays);
   beep(523,.1); setTimeout(()=>beep(784,.12),90);
   requestAnimationFrame(loop);
-}
-
-function hit(){
-  lives--;
-  $('lives').textContent = Math.max(0, lives);
-  if(lives<=0){ die(); return true; }
-  // mất 1 tim: bất tử 1.5s + xóa địch gần để không chết dây chuyền
-  player.inv = 1.5; shake = 8;
-  burst(player.x,player.y,'#fbbf24',24); beep(220,.25,'sawtooth',.07);
-  enemies = enemies.filter(e => Math.hypot(player.x-e.x, player.y-e.y) > 220);
-  return false;
 }
 
 function die(){
@@ -208,7 +207,7 @@ function loop(now){
   for(const e of enemies){
     const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy)||1;
     e.x+=dx/d*e.sp*dt; e.y+=dy/d*e.sp*dt;
-    if(d < e.r+player.r && player.inv<=0){ if(hit()) return; }
+    if(d < e.r+player.r && player.inv<=0){ die(); return; }
   }
   // orbs
   for(let i=orbs.length-1;i>=0;i--){
