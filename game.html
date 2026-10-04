@@ -53,11 +53,12 @@
     <p>Game sinh tồn 1 mạng — càng sống lâu, điểm càng cao.</p>
     <div class="rules">
       <ul>
-        <li>💜 <b>Bạn:</b> chấm tím, đi bằng <kbd>WASD</kbd> / chuột / chạm</li>
-        <li>🔴 <b>Tránh:</b> chấm đỏ — chạm 1 cái là thua ngay</li>
-        <li>🔵 <b>Ăn:</b> chấm xanh +10đ × combo. Ăn liên tiếp trong 4s để lên <b>x8</b></li>
-        <li>⚡ <b>Dash:</b> <kbd>Space</kbd> để lướt nhanh + bất tử 0.4s, hồi sau 1.5s</li>
-        <li>🗺️ <b>Map:</b> rộng 2400×2400, xem vị trí ở minimap góc phải dưới</li>
+        <li>💜 <b>Bạn:</b> chấm tím, đi bằng <kbd>WASD</kbd> / chuột / chạm. Ăn orb để <b>to ra</b> (tối đa 26)</li>
+        <li>🔴 <b>Đỏ viền đỏ:</b> to hơn bạn — tránh xa, chạm là thua</li>
+        <li>🟢 <b>Đỏ viền xanh:</b> nhỏ hơn bạn — <b>nuốt được +15đ × combo</b>, nhả ra 1 orb</li>
+        <li>🔵 <b>Orb xanh</b> +10đ × combo. Ăn liên tiếp trong 4s để lên <b>x8</b></li>
+        <li>⚡ <b>Dash:</b> <kbd>Space</kbd> lướt + bất tử 0.4s, hồi 1.5s</li>
+        <li>🗺️ <b>Map:</b> 2400×2400, xem minimap góc phải dưới</li>
       </ul>
     </div>
     <p>💡 Mẹo cho người mới: 10 giây đầu chỉ chạy + ăn orb gần, đừng đuổi orb xa. Để dành Dash khi bị bao vây.</p>
@@ -121,7 +122,11 @@ function spawnEnemy(){
   else if(side===2){x=vx0+Math.random()*(vx1-vx0);y=vy1;} else {x=vx0;y=vy0+Math.random()*(vy1-vy0);}
   x=Math.max(20,Math.min(WORLD.w-20,x)); y=Math.max(20,Math.min(WORLD.h-20,y));
   const diff = Math.min(1.8, 1 + elapsed/45);
-  enemies.push({x,y,r:(9+Math.random()*8)*0.7, sp:(50+Math.random()*60)*diff, hue:Math.random()*40});
+  // 20% địch to để tạo nguy hiểm, còn lại địch nhỏ ăn được
+  let r, sp;
+  if(Math.random()<0.2){ r = 15+Math.random()*5; sp = (40+Math.random()*40)*diff; }
+  else { r = (9+Math.random()*8)*0.7; sp = (50+Math.random()*60)*diff; }
+  enemies.push({x,y,r,sp,hue:Math.random()*40});
 }
 function spawnOrb(){
   orbs.push({x:40+Math.random()*(WORLD.w-80), y:40+Math.random()*(WORLD.h-80), r:8, pulse:Math.random()*6});
@@ -190,6 +195,8 @@ function loop(now){
   player.x=Math.max(14,Math.min(WORLD.w-14,player.x));
   player.y=Math.max(14,Math.min(WORLD.h-14,player.y));
   if(player.dash>0)player.dash-=dt; if(player.inv>0)player.inv-=dt; if(dashCD>0)dashCD-=dt;
+  // to ra khi ăn nhưng xẹp dần về 12 để giữ căng thẳng
+  if(player.r>12) player.r = Math.max(12, player.r - 0.25*dt);
 
   // camera follow
   const tx = player.x - cv.width/2, ty = player.y - cv.height/2;
@@ -204,11 +211,23 @@ function loop(now){
   // combo timer
   if(comboT>0){ comboT-=dt; if(comboT<=0) combo=1; }
 
-  // enemies
-  for(const e of enemies){
+  // enemies: to hơn thì ăn, nhỏ hơn thì chết
+  for(let i=enemies.length-1;i>=0;i--){
+    const e=enemies[i];
     const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy)||1;
     e.x+=dx/d*e.sp*dt; e.y+=dy/d*e.sp*dt;
-    if(d < e.r+player.r && player.inv<=0){ die(); return; }
+    if(d < e.r+player.r && player.inv<=0){
+      if(player.r > e.r + 1){
+        // ăn địch: +điểm, to ra chút, địch biến thành 1 orb ngay chỗ đó
+        enemies.splice(i,1);
+        combo = Math.min(8, combo + (comboT>0?1:0) || 1);
+        comboT=4; maxcombo=Math.max(maxcombo,combo);
+        score += 15*combo;
+        player.r = Math.min(26, player.r + 0.8);
+        orbs.push({x:Math.max(40,Math.min(WORLD.w-40,e.x)), y:Math.max(40,Math.min(WORLD.h-40,e.y)), r:8, pulse:0});
+        burst(e.x,e.y,'#fde047',16); beep(600+combo*60,.09);
+      } else { die(); return; }
+    }
   }
   // orbs
   for(let i=orbs.length-1;i>=0;i--){
@@ -219,6 +238,7 @@ function loop(now){
       if(comboT<=0) combo=Math.max(1,combo);
       comboT=4; maxcombo=Math.max(maxcombo,combo);
       score += 10*combo;
+      player.r = Math.min(26, player.r + 0.5);
       burst(o.x,o.y,'#22d3ee',12); beep(400+combo*90,.07);
       spawnOrb();
     }
@@ -251,8 +271,13 @@ function loop(now){
     ctx.beginPath(); ctx.arc(o.x,o.y,o.r+Math.sin(o.pulse)*2,0,7); ctx.fill(); ctx.shadowBlur=0;
   }
   for(const e of enemies){
-    ctx.shadowBlur=16; ctx.shadowColor='#ef4444'; ctx.fillStyle=`hsl(${e.hue} 90% 60%)`;
+    const edible = player.r > e.r + 1;
+    ctx.shadowBlur=16; ctx.shadowColor= edible ? '#22d3ee' : '#ef4444';
+    ctx.fillStyle=`hsl(${e.hue} 90% 60%)`;
     ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,7); ctx.fill(); ctx.shadowBlur=0;
+    // vòng ngoài báo ăn được (xanh) hay nguy hiểm (đỏ)
+    ctx.strokeStyle= edible ? '#22d3ee' : '#ef4444'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(e.x,e.y,e.r+3,0,7); ctx.stroke();
   }
   for(const p of parts){ ctx.globalAlpha=Math.max(0,p.life*2); ctx.fillStyle=p.color; ctx.fillRect(p.x-2,p.y-2,4,4); }
   ctx.globalAlpha=1;
