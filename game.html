@@ -42,11 +42,13 @@
 <canvas id="game"></canvas>
 
 <div class="hud">
+  <div class="pill">💜 <span id="psize">12</span></div>
   <div class="pill">⭐ <span id="score">0</span></div>
   <div class="pill" id="combo">x1 COMBO</div>
   <div class="pill">🏆 <span id="best">0</span><span id="dashbar"><span id="dashfill"></span></span></div>
   <div class="pill" id="mutebtn" title="Tắt/bật tiếng (M)" style="cursor:pointer;pointer-events:auto">🔊</div>
 </div>
+<div id="legend" style="position:fixed;left:10px;bottom:10px;background:rgba(15,23,42,.85);border:1px solid #334155;border-radius:10px;padding:8px 12px;font-size:13px;pointer-events:none">🟢 viền xanh = nuốt được &nbsp; 🔴 viền đỏ = tránh &nbsp; 🟣 TITAN = chạy</div>
 
 <div id="start" class="overlay">
   <div class="panel" style="max-width:480px">
@@ -303,22 +305,38 @@ function loop(now){
   }
   for(const e of enemies){
     const edible = player.r > e.r + 1;
-    ctx.shadowBlur = e.titan ? 26 : 16; ctx.shadowColor= e.titan ? '#a78bfa' : (edible ? '#22d3ee' : '#ef4444');
+    const dpe = Math.hypot(player.x-e.x, player.y-e.y);
+    const pulse = 1 + Math.sin(now/200 + e.x)*0.08;
+    ctx.shadowBlur = e.titan ? 26 : 16; ctx.shadowColor= e.titan ? '#a78bfa' : (edible ? '#22c55e' : '#ef4444');
     ctx.fillStyle=`hsl(${e.hue} 90% 60%)`;
-    ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,7); ctx.fill(); ctx.shadowBlur=0;
-    // vòng ngoài báo ăn được (xanh) hay nguy hiểm (đỏ), titan viền tím dày
-    ctx.strokeStyle= e.titan ? '#a78bfa' : (edible ? '#22d3ee' : '#ef4444'); ctx.lineWidth= e.titan ? 4 : 2;
-    ctx.beginPath(); ctx.arc(e.x,e.y,e.r+3,0,7); ctx.stroke();
-    if(e.titan){ ctx.fillStyle='#fff'; ctx.font='bold 12px system-ui'; ctx.textAlign='center'; ctx.fillText('TITAN', e.x, e.y- e.r -8); }
+    ctx.beginPath(); ctx.arc(e.x,e.y,e.r*pulse,0,7); ctx.fill(); ctx.shadowBlur=0;
+    // vòng ngoài to-rõ: xanh dày nếu ăn được, đỏ nếu nguy hiểm, tím rất dày nếu titan
+    ctx.strokeStyle= e.titan ? '#a78bfa' : (edible ? '#22c55e' : '#ef4444'); ctx.lineWidth= e.titan ? 5 : 3.5;
+    ctx.beginPath(); ctx.arc(e.x,e.y,e.r+5,0,7); ctx.stroke();
+    ctx.textAlign='center';
+    if(e.titan){
+      ctx.fillStyle='#fff'; ctx.font='bold 13px system-ui';
+      ctx.fillText('⛔ TITAN CHẠY!', e.x, e.y - e.r - 10);
+    } else if(edible){
+      // chỉ hiện chữ khi ở gần để đỡ rối
+      if(dpe < 320){ ctx.fillStyle='#86efac'; ctx.font='bold 12px system-ui'; ctx.fillText('😋 NUỐT!', e.x, e.y - e.r - 8); }
+    } else {
+      if(dpe < 280){ ctx.fillStyle='#fca5a5'; ctx.font='bold 13px system-ui'; ctx.fillText('☠️ TRÁNH!', e.x, e.y - e.r - 8); }
+    }
   }
   for(const p of parts){ ctx.globalAlpha=Math.max(0,p.life*2); ctx.fillStyle=p.color; ctx.fillRect(p.x-2,p.y-2,4,4); }
   ctx.globalAlpha=1;
 
-  // player
+  // player + vòng ngưỡng ăn được
   if(player.inv<=0 || Math.floor(now/100)%2===0){
     ctx.shadowBlur=22; ctx.shadowColor= player.dash>0 ? '#22c55e' : '#7c3aed';
     ctx.fillStyle= player.dash>0 ? '#22c55e' : '#a78bfa';
     ctx.beginPath(); ctx.arc(player.x,player.y,player.r,0,7); ctx.fill(); ctx.shadowBlur=0;
+    // vòng trắng mờ = ngưỡng so size, địch nhỏ hơn vòng này là nuốt được
+    ctx.strokeStyle='rgba(226,232,240,.5)'; ctx.lineWidth=1.5; ctx.setLineDash([6,6]);
+    ctx.beginPath(); ctx.arc(player.x,player.y,player.r+1,0,7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#fff'; ctx.font='bold 12px system-ui'; ctx.textAlign='center';
+    ctx.fillText(Math.round(player.r), player.x, player.y+4);
   }
   ctx.restore();
 
@@ -329,14 +347,19 @@ function loop(now){
   const sx=mm/WORLD.w, sy=mm/WORLD.h;
   ctx.fillStyle='#22d3ee';
   for(const o of orbs){ ctx.fillRect(mx+o.x*sx-1,my+o.y*sy-1,2,2); }
-  ctx.fillStyle='#ef4444';
-  for(const e of enemies){ ctx.fillRect(mx+e.x*sx-1.5,my+e.y*sy-1.5,3,3); }
+  for(const e of enemies){
+    const edible = player.r > e.r + 1;
+    if(e.titan){ ctx.fillStyle = (Math.floor(now/300)%2===0) ? '#a78bfa' : '#fff'; ctx.fillRect(mx+e.x*sx-2.5,my+e.y*sy-2.5,5,5); }
+    else if(edible){ ctx.fillStyle='#22c55e'; ctx.fillRect(mx+e.x*sx-1.5,my+e.y*sy-1.5,3,3); }
+    else { ctx.fillStyle='#ef4444'; ctx.fillRect(mx+e.x*sx-1.5,my+e.y*sy-1.5,3,3); }
+  }
   ctx.strokeStyle='#e2e8f0'; ctx.strokeRect(mx+cam.x*sx,my+cam.y*sy,Math.min(cv.width,WORLD.w)*sx,Math.min(cv.height,WORLD.h)*sy);
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(mx+player.x*sx,my+player.y*sy,3,0,7); ctx.fill();
 
   $('score').textContent=Math.floor(score);
   $('combo').textContent='x'+combo+' COMBO';
   $('best').textContent=best;
+  $('psize').textContent=Math.round(player.r);
   $('dashfill').style.width = Math.max(0,100-(dashCD/1.5*100))+'%';
 
   requestAnimationFrame(loop);
