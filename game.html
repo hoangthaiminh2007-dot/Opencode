@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>NEON SURVIVE — Opencode</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:#05070f; color:#e2e8f0; font-family: system-ui, sans-serif; overflow:hidden; }
+  #game { display:block; width:100vw; height:100vh; }
+  .hud {
+    position:fixed; top:0; left:0; right:0;
+    display:flex; gap:12px; justify-content:center;
+    padding:10px; pointer-events:none; font-weight:700;
+  }
+  .pill { background:rgba(15,23,42,.8); border:1px solid #334155; border-radius:999px; padding:6px 14px; }
+  #combo { color:#22d3ee; }
+  #dashbar { width:110px; height:8px; background:#1e293b; border-radius:99px; overflow:hidden; display:inline-block; vertical-align:middle; margin-left:8px;}
+  #dashfill { height:100%; width:100%; background:#22c55e; }
+  .overlay {
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(2,6,23,.78); backdrop-filter: blur(6px); text-align:center; padding:20px;
+  }
+  .hidden { display:none !important; }
+  .panel { max-width:440px; background:#0f172a; border:1px solid #334155; border-radius:16px; padding:28px; box-shadow:0 0 60px #2563eb44; }
+  h1 { margin:0 0 8px; font-size:32px; letter-spacing:1px; }
+  h1 span { color:#22d3ee; text-shadow:0 0 18px #22d3ee; }
+  p { color:#94a3b8; margin:8px 0; }
+  .btn {
+    display:inline-block; margin-top:14px; padding:12px 28px; border:0; border-radius:12px;
+    background:linear-gradient(135deg,#22d3ee,#7c3aed); color:white; font-size:18px; font-weight:800; cursor:pointer;
+  }
+  kbd { background:#1e293b; border:1px solid #475569; border-radius:6px; padding:2px 8px; }
+  a.back { color:#7dd3fc; text-decoration:none; display:inline-block; margin-top:12px; }
+  .best { font-size:20px; color:#fde047; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div class="hud">
+  <div class="pill">⭐ <span id="score">0</span></div>
+  <div class="pill" id="combo">x1 COMBO</div>
+  <div class="pill">🏆 <span id="best">0</span><span id="dashbar"><span id="dashfill"></span></span></div>
+</div>
+
+<div id="start" class="overlay">
+  <div class="panel">
+    <h1>NEON <span>SURVIVE</span></h1>
+    <p>Sống càng lâu càng tốt. Ăn orb xanh để lên combo <b>x8</b>.</p>
+    <p>Di chuyển: <kbd>WASD</kbd> / <kbd>←↑↓→</kbd> / chuột / chạm<br>Dash bất tử: <kbd>Space</kbd> / chạm 2 ngón</p>
+    <p class="best">🏆 Kỷ lục: <span id="bestStart">0</span> — đã chơi <span id="plays">0</span> ván</p>
+    <button class="btn" id="playBtn">▶ CHƠI NGAY</button><br>
+    <a class="back" href="index.html">← về trang chủ</a>
+  </div>
+</div>
+
+<div id="over" class="overlay hidden">
+  <div class="panel">
+    <h1>GAME <span>OVER</span></h1>
+    <p>Điểm: <b id="final">0</b> — sống <b id="time">0</b>s — combo cao nhất <b id="maxcombo">x1</b></p>
+    <p class="best" id="newbest" style="display:none">🔥 KỶ LỤC MỚI!</p>
+    <p class="best">🏆 Kỷ lục: <span id="bestOver">0</span></p>
+    <button class="btn" id="retryBtn">↻ CHƠI LẠI (R)</button><br>
+    <a class="back" href="index.html">← về trang chủ</a>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+function resize(){ cv.width = innerWidth; cv.height = innerHeight; }
+addEventListener('resize', resize); resize();
+
+const $ = id => document.getElementById(id);
+const BEST_KEY='neon-best', PLAYS_KEY='neon-plays';
+let best = +(localStorage.getItem(BEST_KEY)||0);
+let plays = +(localStorage.getItem(PLAYS_KEY)||0);
+$('best').textContent = best; $('bestStart').textContent = best; $('plays').textContent = plays;
+
+let player, enemies, orbs, parts, keys, running=false, score=0, combo=1, comboT=0, maxcombo=1, t0=0, elapsed=0, dashCD=0, shake=0, mouse={x:innerWidth/2,y:innerHeight/2,active:false};
+
+addEventListener('keydown', e=>{ keys[e.key.toLowerCase()]=true; if(e.code==='Space'){e.preventDefault(); tryDash();} if(e.key.toLowerCase()==='r' && !running) start(); });
+addEventListener('keyup', e=>{ keys[e.key.toLowerCase()]=false; });
+cv.addEventListener('pointermove', e=>{ mouse.x=e.clientX; mouse.y=e.clientY; mouse.active=true; });
+cv.addEventListener('pointerdown', e=>{ mouse.x=e.clientX; mouse.y=e.clientY; mouse.active=true; });
+
+function beep(f=440,d=.07,type='square',v=.05){
+  try{
+    const a = beep.ac || (beep.ac = new (window.AudioContext||window.webkitAudioContext)());
+    const o=a.createOscillator(), g=a.createGain();
+    o.type=type; o.frequency.value=f; g.gain.value=v;
+    o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+d);
+  }catch(e){}
+}
+
+function spawnEnemy(){
+  const side = Math.floor(Math.random()*4);
+  let x,y;
+  if(side===0){x=Math.random()*cv.width;y=-20;} else if(side===1){x=cv.width+20;y=Math.random()*cv.height;}
+  else if(side===2){x=Math.random()*cv.width;y=cv.height+20;} else {x=-20;y=Math.random()*cv.height;}
+  const diff = Math.min(2.2, 1 + elapsed/30);
+  enemies.push({x,y,r:10+Math.random()*10, sp:(60+Math.random()*80)*diff, hue:Math.random()*40});
+}
+function spawnOrb(){
+  orbs.push({x:30+Math.random()*(cv.width-60), y:60+Math.random()*(cv.height-90), r:8, pulse:Math.random()*6});
+}
+
+function tryDash(){
+  if(!running || dashCD>0) return;
+  dashCD=2; player.dash=0.28; player.inv=0.35;
+  beep(880,.08,'sawtooth'); burst(player.x,player.y,'#22c55e',14);
+}
+
+function burst(x,y,color,n=10){
+  for(let i=0;i<n;i++) parts.push({x,y,vx:(Math.random()-.5)*400,vy:(Math.random()-.5)*400,life:.5+Math.random()*.4,color});
+}
+
+function start(){
+  player={x:cv.width/2,y:cv.height/2,r:12,vx:0,vy:0,inv:1,dash:0};
+  enemies=[]; orbs=[]; parts=[]; keys={};
+  score=0; combo=1; comboT=0; maxcombo=1; elapsed=0; dashCD=0; shake=0; t0=performance.now();
+  for(let i=0;i<3;i++) spawnOrb();
+  running=true;
+  $('start').classList.add('hidden'); $('over').classList.add('hidden');
+  plays++; localStorage.setItem(PLAYS_KEY, plays);
+  beep(523,.1); setTimeout(()=>beep(784,.12),90);
+  requestAnimationFrame(loop);
+}
+
+function die(){
+  running=false;
+  burst(player.x,player.y,'#ef4444',40);
+  shake=14; beep(160,.4,'sawtooth',.08);
+  const isNew = Math.floor(score) > best;
+  if(isNew){ best=Math.floor(score); localStorage.setItem(BEST_KEY,best); }
+  $('final').textContent=Math.floor(score);
+  $('time').textContent=elapsed.toFixed(1);
+  $('maxcombo').textContent='x'+maxcombo;
+  $('bestOver').textContent=best;
+  $('newbest').style.display = isNew?'block':'none';
+  setTimeout(()=>{ $('over').classList.remove('hidden'); }, 500);
+}
+
+let last=performance.now();
+function loop(now){
+  if(!running) return;
+  let dt=Math.min(.033,(now-last)/1000); last=now;
+  elapsed=(now-t0)/1000;
+
+  // difficulty
+  if(Math.random() < (0.02 + elapsed*0.0015)) spawnEnemy();
+  if(orbs.length<4 && Math.random()<0.03) spawnOrb();
+
+  // move player
+  const ACC=1400; let ax=0, ay=0;
+  if(keys['a']||keys['arrowleft'])ax-=1; if(keys['d']||keys['arrowright'])ax+=1;
+  if(keys['w']||keys['arrowup'])ay-=1; if(keys['s']||keys['arrowdown'])ay+=1;
+  if(ax||ay){ const l=Math.hypot(ax,ay); player.vx+=ax/l*ACC*dt; player.vy+=ay/l*ACC*dt; }
+  else if(mouse.active){
+    const dx=mouse.x-player.x, dy=mouse.y-player.y, d=Math.hypot(dx,dy);
+    if(d>4){ player.vx += dx/d*ACC*dt*0.9; player.vy += dy/d*ACC*dt*0.9; }
+  }
+  player.vx*=Math.pow(0.02,dt); player.vy*=Math.pow(0.02,dt);
+  let spd = player.dash>0 ? 2.6 : 1;
+  player.x+=player.vx*spd*dt; player.y+=player.vy*spd*dt;
+  player.x=Math.max(12,Math.min(cv.width-12,player.x));
+  player.y=Math.max(12,Math.min(cv.height-12,player.y));
+  if(player.dash>0)player.dash-=dt; if(player.inv>0)player.inv-=dt; if(dashCD>0)dashCD-=dt;
+
+  // combo timer
+  if(comboT>0){ comboT-=dt; if(comboT<=0) combo=1; }
+
+  // enemies
+  for(const e of enemies){
+    const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy)||1;
+    e.x+=dx/d*e.sp*dt; e.y+=dy/d*e.sp*dt;
+    if(d < e.r+player.r && player.inv<=0){ die(); return; }
+  }
+  // orbs
+  for(let i=orbs.length-1;i>=0;i--){
+    const o=orbs[i]; o.pulse+=dt*4;
+    if(Math.hypot(player.x-o.x,player.y-o.y) < player.r+o.r+4){
+      orbs.splice(i,1);
+      combo = Math.min(8, combo + (comboT>0?1:0) || 1);
+      if(comboT<=0) combo=Math.max(1,combo);
+      comboT=3; maxcombo=Math.max(maxcombo,combo);
+      score += 10*combo;
+      burst(o.x,o.y,'#22d3ee',12); beep(400+combo*90,.07);
+      spawnOrb();
+    }
+  }
+  score += dt*(1+elapsed*0.05); // survival points
+
+  // particles
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life<=0)parts.splice(i,1); }
+  if(shake>0)shake-=dt*40;
+
+  // draw
+  ctx.save();
+  if(shake>0) ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
+  ctx.fillStyle='#05070f'; ctx.fillRect(-20,-20,cv.width+40,cv.height+40);
+
+  // grid
+  ctx.strokeStyle='#0f172a'; ctx.lineWidth=1;
+  for(let x=0;x<cv.width;x+=40){ ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,cv.height);ctx.stroke(); }
+  for(let y=0;y<cv.height;y+=40){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cv.width,y);ctx.stroke(); }
+
+  for(const o of orbs){
+    ctx.shadowBlur=18; ctx.shadowColor='#22d3ee'; ctx.fillStyle='#22d3ee';
+    ctx.beginPath(); ctx.arc(o.x,o.y,o.r+Math.sin(o.pulse)*2,0,7); ctx.fill(); ctx.shadowBlur=0;
+  }
+  for(const e of enemies){
+    ctx.shadowBlur=16; ctx.shadowColor='#ef4444'; ctx.fillStyle=`hsl(${e.hue} 90% 60%)`;
+    ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,7); ctx.fill(); ctx.shadowBlur=0;
+  }
+  for(const p of parts){ ctx.globalAlpha=Math.max(0,p.life*2); ctx.fillStyle=p.color; ctx.fillRect(p.x-2,p.y-2,4,4); }
+  ctx.globalAlpha=1;
+
+  // player
+  if(player.inv<=0 || Math.floor(now/100)%2===0){
+    ctx.shadowBlur=22; ctx.shadowColor= player.dash>0 ? '#22c55e' : '#7c3aed';
+    ctx.fillStyle= player.dash>0 ? '#22c55e' : '#a78bfa';
+    ctx.beginPath(); ctx.arc(player.x,player.y,player.r,0,7); ctx.fill(); ctx.shadowBlur=0;
+  }
+  ctx.restore();
+
+  $('score').textContent=Math.floor(score);
+  $('combo').textContent='x'+combo+' COMBO';
+  $('best').textContent=best;
+  $('dashfill').style.width = Math.max(0,100-(dashCD/2*100))+'%';
+
+  requestAnimationFrame(loop);
+}
+
+$('playBtn').onclick=start;
+$('retryBtn').onclick=start;
+</script>
+</body>
+</html>
