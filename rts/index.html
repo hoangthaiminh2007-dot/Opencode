@@ -85,16 +85,14 @@ const LEVELS=[
   {name:'4 — Ác mộng', desc:'Nhà đỏ 1000 máu, AI đẻ liên tục', energy:120, enemyEnergy:140, pHP:600, eHP:1000, aiBase:4, aiMin:2.5, tankAt:20, enemyTanks:true, extraTanks:2, nodes:[{x:800,y:200,r:42},{x:800,y:450,r:48},{x:800,y:700,r:42}]},
 ];
 let curLevel=0;
-let unlocked=+(localStorage.getItem('neon-cmd-unlock')||1);
 let units,nodes,parts,running,energy,enemyEnergy,elapsed,t0,selected,drag,aiT,nextId,over;
 
 function renderLevels(){
   const box=$('levels'); box.innerHTML='';
   LEVELS.forEach((lv,i)=>{
     const b=document.createElement('button');
-    const open=(i+1)<=unlocked;
-    b.textContent=(open?'▶ ':'🔒 ')+lv.name;
-    b.className='b1'; b.disabled=!open; b.title=lv.desc;
+    b.textContent='▶ '+lv.name;
+    b.className='b1'; b.title=lv.desc;
     b.onclick=()=>{ curLevel=i; state={pHP:lv.pHP,eHP:lv.eHP}; reset(); last=performance.now(); requestAnimationFrame(loop); beep(660,.1); };
     box.appendChild(b);
   });
@@ -151,9 +149,6 @@ function damageBase(side,atk){
 }
 function end(win){
   if(over)return; over=true; running=false;
-  if(win && curLevel+1 < LEVELS.length && curLevel+2 > unlocked){
-    unlocked=curLevel+2; localStorage.setItem('neon-cmd-unlock',unlocked); renderLevels();
-  }
   $('result').textContent=win?`🏆 THẮNG MÀN ${curLevel+1}!`:'💀 THUA — mất nhà xanh';
   $('result').style.color=win?'#4ade80':'#f87171';
   const hasNext=win && curLevel+1<LEVELS.length;
