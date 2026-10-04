@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Opencode — Hello</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>👋 Xin chào, mình là Adminx</h1>
+    <p>Repo đầu tay với Git + GitHub Pages: <strong>Opencode</strong></p>
+    <p>
+      <a href="https://github.com/hoangthaiminh2007-dot/Opencode" target="_blank">Xem code trên GitHub</a>
+    </p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>✅ Todo mini (test PR + Pages)</h2>
+      <form id="todo-form">
+        <input id="todo-input" type="text" placeholder="Nhập việc cần làm rồi Enter..." autocomplete="off" />
+        <button type="submit">Thêm</button>
+      </form>
+      <ul id="todo-list"></ul>
+      <p class="hint">Lưu tự động bằng localStorage. Thử thêm / xóa / tích hoàn thành.</p>
+    </section>
+
+    <section class="card">
+      <h2>🧪 Đã test gì ở repo này?</h2>
+      <ul>
+        <li><code>git branch / checkout / merge</code></li>
+        <li>Pull Request trên GitHub</li>
+        <li>GitHub Pages host web tĩnh miễn phí</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>Deploy bằng GitHub Pages từ branch <code>main</code> — file <code>index.html</code></p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
