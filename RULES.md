@@ -18,7 +18,7 @@ Game sinh tồn 1 mạng, càng sống lâu điểm càng cao. Đọc 1 phút l�
 - Quy tắc chạm:
   - Bạn **to hơn địch trên 1 đơn vị** → **nuốt địch: +15 × combo**, địch biến thành **1 orb** ngay chỗ đó, bạn to thêm +0.8.
   - Ngược lại → **thua ngay**.
-- Nhận biết nhanh: địch **viền xanh = ăn được**, **viền đỏ = tránh xa**, **viền tím dày + chữ TITAN = chạy ngay**.
+- Nhận biết nhanh: địch **viền xanh lá + chữ NUỐT = ăn được**, **viền đỏ + chữ TRÁNH = chạy**, **viền tím dày + chữ TITAN CHẠY = chạy ngay**. Số trên người bạn là size hiện tại, minimap cũng phân màu y hệt.
 
 ## 4. Tính điểm thế nào?
 - Sống sót: +điểm mỗi giây (càng lâu càng nhiều).
